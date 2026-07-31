@@ -5,6 +5,7 @@ import { eq, asc } from "drizzle-orm";
 import { SKINS } from "@/lib/skins";
 import { getStickerById } from "@/lib/stickers";
 import Player from "./_components/Player";
+import PwaPrompt from "./_components/PwaPrompt";
 import type { Metadata } from "next";
 
 interface Props {
@@ -102,6 +103,9 @@ export default async function MixtapePage({ params }: Props) {
         {/* Player */}
         <Player tracks={trackList} skin={skin} />
       </div>
+
+      {/* PWA Download Prompt (Only shown on mixtape view page after 3.5 seconds) */}
+      <PwaPrompt />
     </main>
   );
 }
