@@ -101,7 +101,12 @@ export default async function MixtapePage({ params }: Props) {
         )}
 
         {/* Player */}
-        <Player tracks={trackList} skin={skin} />
+        <Player
+          tracks={trackList}
+          skin={skin}
+          mixtapeSlug={slug}
+          mixtapeName={mixtape.recipientName || "Your Mixtape"}
+        />
       </div>
 
       {/* PWA Download Prompt (Only shown on mixtape view page after 3.5 seconds) */}

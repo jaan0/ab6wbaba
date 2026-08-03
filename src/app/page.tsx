@@ -1,8 +1,9 @@
 import Link from "next/link";
+import RecentMixtapes from "./_components/RecentMixtapes";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4 text-center">
+    <main className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4 text-center py-12">
       {/* Background orbs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-1/4 -left-1/4 w-96 h-96 bg-fuchsia-500/10 rounded-full blur-3xl" />
@@ -22,13 +23,17 @@ export default function HomePage() {
           </p>
         </div>
 
-        <Link
-          href="/create"
-          id="create-mixtape-link"
-          className="inline-block px-10 py-4 bg-gradient-to-r from-fuchsia-500 to-blue-500 hover:from-fuchsia-400 hover:to-blue-400 text-white font-bold text-lg rounded-2xl shadow-lg shadow-fuchsia-500/20 transition-all duration-200 hover:scale-105 active:scale-95"
-        >
-          Create a mixtape →
-        </Link>
+        <div className="space-y-6">
+          <Link
+            href="/create"
+            id="create-mixtape-link"
+            className="inline-block px-10 py-4 bg-gradient-to-r from-fuchsia-500 to-blue-500 hover:from-fuchsia-400 hover:to-blue-400 text-white font-bold text-lg rounded-2xl shadow-lg shadow-fuchsia-500/20 transition-all duration-200 hover:scale-105 active:scale-95"
+          >
+            Create a mixtape →
+          </Link>
+
+          <RecentMixtapes />
+        </div>
 
         <p className="text-gray-700 text-sm">
           No account needed. Free. Always.

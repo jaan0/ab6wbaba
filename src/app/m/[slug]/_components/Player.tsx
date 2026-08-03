@@ -7,6 +7,8 @@ import type { Skin } from "@/lib/skins";
 interface PlayerProps {
   tracks: Track[];
   skin: Skin;
+  mixtapeSlug: string;
+  mixtapeName: string;
 }
 
 function formatTime(sec: number): string {
@@ -16,7 +18,7 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function Player({ tracks, skin }: PlayerProps) {
+export default function Player({ tracks, skin, mixtapeSlug, mixtapeName }: PlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -24,6 +26,28 @@ export default function Player({ tracks, skin }: PlayerProps) {
   const [duration, setDuration] = useState(0);
 
   const current = tracks[currentIndex];
+
+  // Save visited mixtape to localStorage
+  useEffect(() => {
+    try {
+      const visitedStr = localStorage.getItem("visited_mixtapes") || "[]";
+      const visited = JSON.parse(visitedStr) as Array<{
+        slug: string;
+        name: string;
+        timestamp: number;
+      }>;
+      
+      const filtered = visited.filter((item) => item.slug !== mixtapeSlug);
+      const updated = [
+        { slug: mixtapeSlug, name: mixtapeName, timestamp: Date.now() },
+        ...filtered,
+      ].slice(0, 10);
+      
+      localStorage.setItem("visited_mixtapes", JSON.stringify(updated));
+    } catch (e) {
+      console.error("Failed to save visited mixtape:", e);
+    }
+  }, [mixtapeSlug, mixtapeName]);
 
   // Load new track when index changes
   useEffect(() => {
