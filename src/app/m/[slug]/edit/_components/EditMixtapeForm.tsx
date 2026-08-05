@@ -1,26 +1,32 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import StepSkin from "./_components/StepSkin";
-import StepSticker from "./_components/StepSticker";
-import StepTracks, { type TrackFile } from "./_components/StepTracks";
-import StepNote from "./_components/StepNote";
+import { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import StepSkin from "@/app/create/_components/StepSkin";
+import StepSticker from "@/app/create/_components/StepSticker";
+import StepTracks, { type TrackFile } from "@/app/create/_components/StepTracks";
+import StepNote from "@/app/create/_components/StepNote";
 
 type Step = 1 | 2 | 3 | 4;
 
-interface WizardState {
+interface MixtapeData {
+  id: string;
+  slug: string;
   skinId: number;
   stickerId: number | null;
-  tracks: TrackFile[];
   recipientName: string;
   note: string;
+}
+
+interface EditMixtapeFormProps {
+  mixtape: MixtapeData;
+  initialTracks: TrackFile[];
 }
 
 type PublishState =
   | { status: "idle" }
   | { status: "uploading"; current: number; total: number }
   | { status: "saving" }
-  | { status: "done"; slug: string }
   | { status: "error"; message: string };
 
 const STEP_LABELS = ["Theme", "Sticker", "Tracks", "Note"];
@@ -77,7 +83,6 @@ async function uploadFile(
   file: File,
   onProgress: (pct: number) => void
 ): Promise<string> {
-  // 1. Get presigned URL
   const res = await fetch("/api/upload-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -87,7 +92,6 @@ async function uploadFile(
   if (!res.ok) throw new Error("Failed to get upload URL");
   const { uploadUrl, publicUrl } = await res.json();
 
-  // 2. PUT directly to R2 with progress tracking
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", uploadUrl);
@@ -113,17 +117,36 @@ async function uploadFile(
   return publicUrl;
 }
 
-export default function CreatePage() {
+export default function EditMixtapeForm({ mixtape, initialTracks }: EditMixtapeFormProps) {
+  const router = useRouter();
+  const [token, setToken] = useState<string | null>(null);
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
+
   const [step, setStep] = useState<Step>(1);
-  const [state, setState] = useState<WizardState>({
-    skinId: 1,
-    stickerId: null,
-    tracks: [],
-    recipientName: "",
-    note: "",
+  const [state, setState] = useState({
+    skinId: mixtape.skinId,
+    stickerId: mixtape.stickerId,
+    tracks: initialTracks,
+    recipientName: mixtape.recipientName,
+    note: mixtape.note,
   });
   const [publishState, setPublishState] = useState<PublishState>({ status: "idle" });
-  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    try {
+      const keys = JSON.parse(localStorage.getItem("mixtape_keys") || "{}");
+      const savedToken = keys[mixtape.slug];
+      if (savedToken) {
+        setToken(savedToken);
+        setAuthorized(true);
+      } else {
+        setAuthorized(false);
+      }
+    } catch (e) {
+      console.error("Failed to parse mixtape keys", e);
+      setAuthorized(false);
+    }
+  }, [mixtape.slug]);
 
   const updateTracks = useCallback((tracks: TrackFile[]) => {
     setState((prev) => ({ ...prev, tracks }));
@@ -134,42 +157,57 @@ export default function CreatePage() {
     return true;
   };
 
-  const handlePublish = async () => {
+  const handleUpdate = async () => {
     if (state.tracks.length === 0) return;
+    if (!token) return;
 
-    // Upload all tracks sequentially
-    const uploadedTracks: TrackFile[] = [...state.tracks];
+    // Filter tracks to find which ones need uploading (status !== "done")
+    const updatedTracks: TrackFile[] = [...state.tracks];
 
     try {
+      const tracksToUpload = state.tracks.filter(t => t.status !== "done");
+
       for (let i = 0; i < state.tracks.length; i++) {
         const track = state.tracks[i];
+        if (track.status === "done" && track.publicUrl) {
+          continue;
+        }
 
-        setPublishState({ status: "uploading", current: i + 1, total: state.tracks.length });
+        if (!track.file) {
+          throw new Error(`File is missing for track: ${track.title}`);
+        }
 
-        // Update individual track status
-        uploadedTracks[i] = { ...track, status: "uploading" };
-        setState((prev) => ({ ...prev, tracks: [...uploadedTracks] }));
-
-        const publicUrl = await uploadFile(track.file!, (pct) => {
-          uploadedTracks[i] = { ...uploadedTracks[i], progress: pct };
-          setState((prev) => ({ ...prev, tracks: [...uploadedTracks] }));
+        setPublishState({
+          status: "uploading",
+          current: i + 1,
+          total: state.tracks.length,
         });
 
-        uploadedTracks[i] = { ...uploadedTracks[i], status: "done", publicUrl, progress: 100 };
-        setState((prev) => ({ ...prev, tracks: [...uploadedTracks] }));
+        // Update track status to uploading
+        updatedTracks[i] = { ...track, status: "uploading" };
+        setState((prev) => ({ ...prev, tracks: [...updatedTracks] }));
+
+        const publicUrl = await uploadFile(track.file, (pct) => {
+          updatedTracks[i] = { ...updatedTracks[i], progress: pct };
+          setState((prev) => ({ ...prev, tracks: [...updatedTracks] }));
+        });
+
+        updatedTracks[i] = { ...updatedTracks[i], status: "done", publicUrl, progress: 100 };
+        setState((prev) => ({ ...prev, tracks: [...updatedTracks] }));
       }
 
-      // Save to DB
+      // Save to database via PUT
       setPublishState({ status: "saving" });
-      const saveRes = await fetch("/api/mixtapes", {
-        method: "POST",
+      const saveRes = await fetch(`/api/mixtapes/${mixtape.slug}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           skinId: state.skinId,
           stickerId: state.stickerId,
           recipientName: state.recipientName,
           note: state.note,
-          tracks: uploadedTracks.map((t, idx) => ({
+          creatorToken: token,
+          tracks: updatedTracks.map((t, idx) => ({
             title: t.title,
             fileUrl: t.publicUrl!,
             trackOrder: idx,
@@ -177,18 +215,13 @@ export default function CreatePage() {
         }),
       });
 
-      if (!saveRes.ok) throw new Error("Failed to save mixtape");
-      const { slug, creatorToken } = await saveRes.json();
-
-      try {
-        const keys = JSON.parse(localStorage.getItem("mixtape_keys") || "{}");
-        keys[slug] = creatorToken;
-        localStorage.setItem("mixtape_keys", JSON.stringify(keys));
-      } catch (err) {
-        console.error("Failed to save creator token:", err);
+      if (!saveRes.ok) {
+        const errData = await saveRes.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to update mixtape");
       }
 
-      setPublishState({ status: "done", slug });
+      router.push(`/m/${mixtape.slug}`);
+      router.refresh();
     } catch (err) {
       setPublishState({
         status: "error",
@@ -197,53 +230,38 @@ export default function CreatePage() {
     }
   };
 
-  const shareUrl =
-    publishState.status === "done"
-      ? `${typeof window !== "undefined" ? window.location.origin : ""}/m/${publishState.slug}`
-      : "";
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // ── Publish / done screen ─────────────────────────────────────────────────
-  if (publishState.status === "done") {
+  if (authorized === null) {
     return (
       <main className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center space-y-8">
-          <div className="text-6xl animate-bounce">🎉</div>
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Your mixtape is live!</h1>
-            <p className="text-gray-400">Share this link with your recipient.</p>
-          </div>
-
-          <div className="bg-gray-900 rounded-2xl p-4 space-y-3">
-            <p className="text-gray-300 text-sm break-all font-mono">{shareUrl}</p>
-            <button
-              id="copy-link-button"
-              onClick={handleCopy}
-              className="w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 bg-blue-500 hover:bg-blue-400 text-white active:scale-95"
-            >
-              {copied ? "✓ Copied!" : "Copy link"}
-            </button>
-            <a
-              href={shareUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              id="open-mixtape-link"
-              className="block w-full py-3 rounded-xl font-semibold text-sm text-center bg-gray-800 hover:bg-gray-700 text-gray-200 transition-all"
-            >
-              Open mixtape →
-            </a>
-          </div>
+        <div className="text-white text-sm font-medium animate-pulse">
+          Verifying ownership…
         </div>
       </main>
     );
   }
 
-  // ── Uploading / saving overlay ────────────────────────────────────────────
+  if (authorized === false) {
+    return (
+      <main className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center space-y-6">
+          <div className="text-6xl">🔒</div>
+          <div>
+            <h1 className="text-3xl font-black text-white mb-2">Access Denied</h1>
+            <p className="text-gray-400 text-sm">
+              Only the creator of this mixtape is authorized to edit it.
+            </p>
+          </div>
+          <a
+            href={`/m/${mixtape.slug}`}
+            className="inline-block py-3 px-6 rounded-xl font-semibold text-sm bg-gray-900 hover:bg-gray-800 text-gray-200 transition-all"
+          >
+            ← Back to Mixtape
+          </a>
+        </div>
+      </main>
+    );
+  }
+
   const isPublishing =
     publishState.status === "uploading" || publishState.status === "saving";
 
@@ -253,9 +271,9 @@ export default function CreatePage() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-black text-white tracking-tight">
-            📼 musictape
+            📼 Edit Mixtape
           </h1>
-          <p className="text-gray-500 text-sm mt-1">Create a mixtape for someone special</p>
+          <p className="text-gray-500 text-sm mt-1">Make adjustments to your creation</p>
         </div>
 
         <StepIndicator current={step} total={4} />
@@ -300,24 +318,26 @@ export default function CreatePage() {
 
           {/* Navigation */}
           <div className="flex gap-3 mt-8">
-            {step > 1 && (
-              <button
-                type="button"
-                onClick={() => setStep((s) => (s - 1) as Step)}
-                disabled={isPublishing}
-                id="wizard-back-button"
-                className="flex-1 py-3 rounded-xl font-semibold text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 transition-all disabled:opacity-50"
-              >
-                ← Back
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (step > 1) {
+                  setStep((s) => (s - 1) as Step);
+                } else {
+                  router.push(`/m/${mixtape.slug}`);
+                }
+              }}
+              disabled={isPublishing}
+              className="flex-1 py-3 rounded-xl font-semibold text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 transition-all disabled:opacity-50"
+            >
+              {step > 1 ? "← Back" : "Cancel"}
+            </button>
 
             {step < 4 ? (
               <button
                 type="button"
                 onClick={() => setStep((s) => (s + 1) as Step)}
                 disabled={!canProceed()}
-                id="wizard-next-button"
                 className="flex-1 py-3 rounded-xl font-semibold text-sm bg-blue-500 hover:bg-blue-400 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
               >
                 {step === 1
@@ -329,9 +349,8 @@ export default function CreatePage() {
             ) : (
               <button
                 type="button"
-                onClick={handlePublish}
+                onClick={handleUpdate}
                 disabled={isPublishing || state.tracks.length === 0}
-                id="publish-button"
                 className="flex-1 py-3 rounded-xl font-bold text-sm bg-gradient-to-r from-blue-500 to-violet-500 hover:from-blue-400 hover:to-violet-400 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shadow-lg shadow-blue-500/20"
               >
                 {isPublishing ? (
@@ -341,7 +360,7 @@ export default function CreatePage() {
                     "Saving…"
                   )
                 ) : (
-                  "🚀 Publish mixtape"
+                  "💾 Save Changes"
                 )}
               </button>
             )}

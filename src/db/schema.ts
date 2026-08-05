@@ -14,6 +14,7 @@ export const mixtapes = pgTable("mixtapes", {
   recipientName: text("recipient_name"),
   note: text("note").notNull().default(""),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  creatorToken: text("creator_token").notNull().default(""),
 });
 
 export const tracks = pgTable("tracks", {

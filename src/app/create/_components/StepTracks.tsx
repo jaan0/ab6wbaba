@@ -21,7 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 export interface TrackFile {
   id: string; // local UUID for dnd-kit
-  file: File;
+  file?: File;
   title: string;
   progress: number; // 0-100
   status: "pending" | "uploading" | "done" | "error";
@@ -33,7 +33,7 @@ interface StepTracksProps {
   onChange: (tracks: TrackFile[]) => void;
 }
 
-const MAX_TRACKS = 12;
+const MAX_TRACKS = 50;
 
 function SortableTrack({
   track,

@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const slug = nanoid(9); // 9-char URL-safe slug
+    const creatorToken = nanoid(16); // 16-char owner token
 
     // Insert mixtape
     const db = getDb();
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
         stickerId: stickerId ?? null,
         recipientName: recipientName?.trim() || null,
         note: note ?? "",
+        creatorToken,
       })
       .returning();
 
@@ -56,7 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return Response.json({ slug, id: mixtape.id }, { status: 201 });
+    return Response.json({ slug, id: mixtape.id, creatorToken }, { status: 201 });
   } catch (err) {
     console.error("[mixtapes POST]", err);
     return Response.json({ error: "Failed to save mixtape" }, { status: 500 });

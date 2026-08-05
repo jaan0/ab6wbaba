@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type { Track } from "@/db/schema";
 import type { Skin } from "@/lib/skins";
 
@@ -24,6 +25,19 @@ export default function Player({ tracks, skin, mixtapeSlug, mixtapeName }: Playe
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isOwner, setIsOwner] = useState(false);
+
+  // Check if current user is owner
+  useEffect(() => {
+    try {
+      const keys = JSON.parse(localStorage.getItem("mixtape_keys") || "{}");
+      if (keys[mixtapeSlug]) {
+        setIsOwner(true);
+      }
+    } catch (e) {
+      console.error("Failed to read ownership keys:", e);
+    }
+  }, [mixtapeSlug]);
 
   const current = tracks[currentIndex];
 
@@ -224,6 +238,17 @@ export default function Player({ tracks, skin, mixtapeSlug, mixtapeName }: Playe
           </button>
         </div>
       </div>
+
+      {isOwner && (
+        <div className="flex justify-center pt-2">
+          <Link
+            href={`/m/${mixtapeSlug}/edit`}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 bg-white/10 hover:bg-white/20 active:scale-95 border ${skin.border}`}
+          >
+            ✏️ Edit Mixtape
+          </Link>
+        </div>
+      )}
 
       {/* Hidden audio element */}
       <audio
