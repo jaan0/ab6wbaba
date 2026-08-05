@@ -54,12 +54,12 @@ export async function PUT(
       return Response.json({ error: "Mixtape not found" }, { status: 404 });
     }
 
-    // 2. Validate ownership token
-    if (existing.creatorToken !== creatorToken) {
+    // 2. Validate ownership token (only if the existing tape already has a token)
+    if (existing.creatorToken && existing.creatorToken !== creatorToken) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // 3. Update mixtape details
+    // 3. Update mixtape details (save creatorToken if it was empty/legacy)
     await db
       .update(mixtapes)
       .set({
@@ -67,6 +67,7 @@ export async function PUT(
         stickerId: stickerId ?? null,
         recipientName: recipientName?.trim() || null,
         note: note ?? "",
+        creatorToken: existing.creatorToken || creatorToken,
       })
       .where(eq(mixtapes.id, existing.id));
 

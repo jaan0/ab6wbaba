@@ -10,6 +10,7 @@ interface PlayerProps {
   skin: Skin;
   mixtapeSlug: string;
   mixtapeName: string;
+  hasCreatorToken: boolean;
 }
 
 function formatTime(sec: number): string {
@@ -19,7 +20,7 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function Player({ tracks, skin, mixtapeSlug, mixtapeName }: PlayerProps) {
+export default function Player({ tracks, skin, mixtapeSlug, mixtapeName, hasCreatorToken }: PlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -31,13 +32,13 @@ export default function Player({ tracks, skin, mixtapeSlug, mixtapeName }: Playe
   useEffect(() => {
     try {
       const keys = JSON.parse(localStorage.getItem("mixtape_keys") || "{}");
-      if (keys[mixtapeSlug]) {
+      if (keys[mixtapeSlug] || !hasCreatorToken) {
         setIsOwner(true);
       }
     } catch (e) {
       console.error("Failed to read ownership keys:", e);
     }
-  }, [mixtapeSlug]);
+  }, [mixtapeSlug, hasCreatorToken]);
 
   const current = tracks[currentIndex];
 

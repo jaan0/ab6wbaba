@@ -45,6 +45,7 @@ export default async function EditPage({ params }: Props) {
         progress: 100,
         status: "done" as const,
       }))}
+      hasCreatorToken={!!mixtape.creatorToken}
     />
   );
 }

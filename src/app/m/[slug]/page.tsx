@@ -106,6 +106,7 @@ export default async function MixtapePage({ params }: Props) {
           skin={skin}
           mixtapeSlug={slug}
           mixtapeName={mixtape.recipientName || "Your Mixtape"}
+          hasCreatorToken={!!mixtape.creatorToken}
         />
       </div>
 

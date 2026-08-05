@@ -21,6 +21,7 @@ interface MixtapeData {
 interface EditMixtapeFormProps {
   mixtape: MixtapeData;
   initialTracks: TrackFile[];
+  hasCreatorToken: boolean;
 }
 
 type PublishState =
@@ -117,7 +118,7 @@ async function uploadFile(
   return publicUrl;
 }
 
-export default function EditMixtapeForm({ mixtape, initialTracks }: EditMixtapeFormProps) {
+export default function EditMixtapeForm({ mixtape, initialTracks, hasCreatorToken }: EditMixtapeFormProps) {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
@@ -135,7 +136,16 @@ export default function EditMixtapeForm({ mixtape, initialTracks }: EditMixtapeF
   useEffect(() => {
     try {
       const keys = JSON.parse(localStorage.getItem("mixtape_keys") || "{}");
-      const savedToken = keys[mixtape.slug];
+      let savedToken = keys[mixtape.slug];
+      
+      if (!savedToken && !hasCreatorToken) {
+        // Generate a new 16-character token to claim ownership of legacy tape
+        const newToken = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+        keys[mixtape.slug] = newToken;
+        localStorage.setItem("mixtape_keys", JSON.stringify(keys));
+        savedToken = newToken;
+      }
+
       if (savedToken) {
         setToken(savedToken);
         setAuthorized(true);
@@ -146,7 +156,7 @@ export default function EditMixtapeForm({ mixtape, initialTracks }: EditMixtapeF
       console.error("Failed to parse mixtape keys", e);
       setAuthorized(false);
     }
-  }, [mixtape.slug]);
+  }, [mixtape.slug, hasCreatorToken]);
 
   const updateTracks = useCallback((tracks: TrackFile[]) => {
     setState((prev) => ({ ...prev, tracks }));
